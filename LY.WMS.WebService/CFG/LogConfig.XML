@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<configuration>
+  <log4net>
+    <appender name="SqlLogAppender" type="log4net.Appender.RollingFileAppender">
+      <file type="log4net.Util.PatternString" value="Log/SqlLog/SqlLog_%date{yyyy-MM-dd}.SQL" />
+      <appendToFile value="true" />
+      <rollingStyle value="Date" />
+      <datePattern value="yyyy-MM-dd" />
+      <staticLogFileName value="true" />
+      <layout type="log4net.Layout.PatternLayout">
+        <conversionPattern value="--%-5level %date %newline %message%newline" />
+      </layout>
+    </appender>
+    
+    <appender name="ErrorSqlLogAppender" type="log4net.Appender.RollingFileAppender">
+      <file type="log4net.Util.PatternString" value="Log/ErrorLog/ErrorSqlLog_%date{yyyy-MM-dd}.SQL" />
+      <appendToFile value="true" />
+      <rollingStyle value="Date" />
+      <datePattern value="yyyy-MM-dd" />
+      <staticLogFileName value="true" />
+      <layout type="log4net.Layout.PatternLayout">
+        <conversionPattern value="--%-5level %date %newline %message%newline" />
+      </layout>
+    </appender>
+
+    <logger name="SqlLog">
+      <level value="ALL" />
+      <appender-ref ref="SqlLogAppender" />
+    </logger>
+    <logger name="ErrorSqlLog">
+      <level value="ALL" />
+      <appender-ref ref="ErrorSqlLogAppender" />
+    </logger>
+
+  </log4net>
+</configuration>
