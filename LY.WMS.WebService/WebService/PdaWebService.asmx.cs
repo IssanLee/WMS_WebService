@@ -37,5 +37,7 @@ namespace LY.WMS.WebService
         {
             return Common.OracleDB.GetStringBySql("SELECT NAME FROM V$DATABASE");
         }
+
+
     }
 }

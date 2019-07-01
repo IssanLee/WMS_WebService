@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LY.WMS.WebService.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web;
@@ -18,9 +19,9 @@ namespace LY.WMS.WebService
     {
 
         [WebMethod]
-        public string HelloWorld()
+        public List<ReqClass> GetReqList(string ParamHeadStr, string ParamItemStr, DateTime ParamLmdate, int ParamRowIndex, int ParamRowNumber, DateTime ParamDownLoadDate)
         {
-            return "Hello World";
+            return GetTrans.GetReqList(ParamHeadStr, ParamItemStr, ParamLmdate, ParamRowIndex, ParamRowNumber, ParamDownLoadDate);
         }
     }
 }

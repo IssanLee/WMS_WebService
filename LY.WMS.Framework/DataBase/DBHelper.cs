@@ -320,30 +320,410 @@ namespace LY.WMS.Framework.DataBase
             return dataSet;
         }
 
-        #endregion
-
-
         /// <summary>
-        /// 执行sql语句或存储过程，返回受影响的行数,不带参数。
+        /// 获了下一个序列值
         /// </summary>
-        /// <param name="ConnString">连接字符串，可以自定义，可以以使用SqlHelper_DG.ConnString</param>
-        /// <param name="commandTextOrSpName">sql语句或存储过程名称</param>
-        /// <param name="commandType">命令类型 有默认值CommandType.Text</param>
-        /// <returns>返回受影响的行数</returns>
-        public int ExecuteNonQuery(string commandTextOrSpName, CommandType commandType = CommandType.Text)
+        /// <param name="paramSeq">数据库中的序列名称</param>
+        /// <returns></returns>
+        /// <remarks></remarks>
+        public string GetNextSeq(string paramSeq)
         {
             using (SqlConnection_Con conn = new SqlConnection_Con(DataBaseType, ConnString))
             {
                 using (DbCommandCommon cmd = new DbCommandCommon(DataBaseType))
                 {
-                    PreparCommand(conn.DbConnection, cmd.DbCommand, commandTextOrSpName, commandType);
-                    return cmd.DbCommand.ExecuteNonQuery();
+                    string sql = "SELECT " + paramSeq + ".NEXTVAL FROM DUAL";
+                    PreparCommand(conn.DbConnection, cmd.DbCommand, sql, CommandType.Text);
+                    SqlLogEvent(true, "执行查询", sql);
+                    try
+                    {
+                        DbDataReader dbDataReader;
+                        dbDataReader = cmd.DbCommand.ExecuteReader();
+                        if (dbDataReader.Read())
+                        {
+                            return Convert.ToString(dbDataReader[0]);
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        SqlLogEvent(false, "执行查询出错\r\n" + sql, exception.Message.ToString());
+                    }
+                    return null;
                 }
             }
         }
 
+        #endregion
+
+        #region 事务
+        /// <summary>
+        /// 执行无参数的存储过程
+        /// </summary>
+        /// <param name="paramProcName">过程名</param>
+        /// <returns></returns>
+        /// <remarks></remarks>
+        public SqlItemResult RunProcWithTran(string paramProcName)
+        {
+            using (SqlConnection_Con conn = new SqlConnection_Con(DataBaseType, ConnString))
+            {
+                using (DbCommandCommon cmd = new DbCommandCommon(DataBaseType))
+                {
+                    PreparCommand(conn.DbConnection, cmd.DbCommand, paramProcName, CommandType.StoredProcedure);
+
+                    SqlLogEvent(true, "开始一个事务", "");
+                    DbTransaction dbTransaction;
+                    try
+                    {
+                        dbTransaction = cmd.DbCommand.Connection.BeginTransaction();
+                    }
+                    catch(Exception e)
+                    {
+                        SqlLogEvent(false,  "开始一个事务出错", e.Message.ToString());
+                        return new SqlItemResult(false, "开始一个事务出错!", e.Message.ToUpper(), new SqlItem(paramProcName, -1));
+                    }
+
+                    SqlLogEvent(true, "执行存储过程", paramProcName);
+                    try
+                    {
+                        cmd.DbCommand.ExecuteNonQuery();
+                    }
+                    catch (Exception e)
+                    {
+                        SqlLogEvent(false, "执行存储过程出错,准备回滚\r\n" + paramProcName, e.Message.ToString());
+                        dbTransaction.Rollback();
+                        dbTransaction.Dispose();
+                        return new SqlItemResult(false, "执行SQL出错!", e.Message.ToUpper(), new SqlItem(paramProcName, -1)); ;
+                    }
+
+                    SqlLogEvent(true, "提交事务", dbTransaction.ToString());
+                    try
+                    {
+                        dbTransaction.Commit();
+                    }
+                    catch (Exception e)
+                    {
+                        dbTransaction.Dispose();
+                        SqlLogEvent(false, "提交事务出错", e.Message.ToString());
+                        return new SqlItemResult(false, "提交事务出错!", "", new SqlItem(paramProcName, -1));
+                    }
+                    dbTransaction.Dispose();
+                    return new SqlItemResult(true, "执行成功!", "", new SqlItem(paramProcName, -1));
+                }
+            }
+        }
+
+        /// <summary>
+        /// 执行带参数存储过程
+        /// </summary>
+        /// <param name="paramProcName">过程名</param>
+        /// <param name="paramList">参数列表</param>
+        /// <returns></returns>
+        public SqlItemResult RunProcParamWithTran(string paramProcName, List<DbParameter> paramList)
+        {
+            string sql = "";
+            if (paramList.Count > 0)
+            {
+                for (int i = 0; i < paramList.Count; i++)
+                {
+                    sql += paramList[i].ParameterName.ToString() + "=" + paramList[i].Value.ToString() + ",";
+                }
+            }
+
+            using (SqlConnection_Con conn = new SqlConnection_Con(DataBaseType, ConnString))
+            {
+                using (DbCommandCommon cmd = new DbCommandCommon(DataBaseType))
+                {
+                    PreparCommand(conn.DbConnection, cmd.DbCommand, paramProcName, CommandType.StoredProcedure);
+
+                    SqlLogEvent(true, "开始一个事务", "");
+                    DbTransaction dbTransaction;
+                    try
+                    {
+                        dbTransaction = cmd.DbCommand.Connection.BeginTransaction();
+                    }
+                    catch (Exception e)
+                    {
+                        SqlLogEvent(false, "开始一个事务出错", e.Message.ToString());
+                        return new SqlItemResult(false, "开始一个事务出错!", e.Message.ToUpper(), new SqlItem(paramProcName, -1));
+                    }
+
+                    if (paramList.Count > 0)
+                    {
+                        for (int i = 0; i < paramList.Count; i++)
+                        {
+                            cmd.DbCommand.Parameters.Add(paramList[i]);
+                        }
+                    }
+
+
+                    SqlLogEvent(true,  "执行存储过程", paramProcName + " " + sql);
+                    try
+                    {
+                        cmd.DbCommand.ExecuteNonQuery();
+                    }
+                    catch (Exception e)
+                    {
+                        SqlLogEvent(false, "执行存储过程出错,准备回滚\r\n" + paramProcName + " " + sql, e.Message.ToString());
+                        dbTransaction.Rollback();
+                        dbTransaction.Dispose();
+                        return new SqlItemResult(false, "执行SQL出错!", e.Message.ToUpper(), new SqlItem(paramProcName, -1)); ;
+                    }
+
+                    SqlLogEvent(true, "提交事务", dbTransaction.ToString());
+                    try
+                    {
+                        dbTransaction.Commit();
+                    }
+                    catch (Exception e)
+                    {
+                        dbTransaction.Dispose();
+                        SqlLogEvent(false, "提交事务出错", e.Message.ToString());
+                        return new SqlItemResult(false, "提交事务出错!", "", new SqlItem(paramProcName, -1));
+                    }
+                    dbTransaction.Dispose();
+                    return new SqlItemResult(true, "执行成功!", "", new SqlItem(paramProcName, -1));
+                }
+            }
+        }
+
+        /// <summary>
+        /// 批量执行带参数的存储过程
+        /// </summary>
+        /// <param name="paramSqlParamItem"></param>
+        /// <returns></returns>
+        public SqlParamItemResult RunProcBatchWithParamWithTran(List<SqlParamItem> paramSqlParamItem)
+        {
+            if (paramSqlParamItem == null)
+            {
+                return new SqlParamItemResult(false, "数据无效", "传入的数据无效", null);
+            }
+            if (paramSqlParamItem.Count == 0)
+            {
+                return new SqlParamItemResult(false, "数据无效", "传入的数据无效", null);
+            }
+
+            using (SqlConnection_Con conn = new SqlConnection_Con(DataBaseType, ConnString))
+            {
+                using (DbCommandCommon cmd = new DbCommandCommon(DataBaseType))
+                {
+                    SqlLogEvent(true, "开始一个事务", "");
+                    DbTransaction dbTransaction;
+                    try
+                    {
+                        dbTransaction = cmd.DbCommand.Connection.BeginTransaction();
+                    }
+                    catch (Exception e)
+                    {
+                        SqlLogEvent(false, "开始一个事务出错", e.Message.ToString());
+                        return new SqlParamItemResult(false, "开始一个事务出错", e.Message.ToUpper(), null);
+                    }
+
+                    string sql = "";
+                    foreach (SqlParamItem item in paramSqlParamItem)
+                    {
+                        PreparCommand(conn.DbConnection, cmd.DbCommand, item.GetSqlStr(), CommandType.StoredProcedure);
+
+                        if (item.ParamList.Count > 0)
+                        {
+                            for (int i = 0; i < item.ParamList.Count; i++)
+                            {
+                                try
+                                {
+                                    cmd.DbCommand.Parameters.Add(item.ParamList[i]);
+                                    sql += item.ParamList[i].ParameterName.ToString() + "=" + item.ParamList[i].Value.ToString() + ",";
+
+                                }
+                                catch (Exception e)
+                                {
+                                    return new SqlParamItemResult(false, item.ParamList[i].ParameterName.ToString(), e.Message.ToString(), null);
+                                }
+                           }
+                        }
+
+                        SqlLogEvent(true, "执行存储过程", item.SqlStr + " " + sql);
+                        try
+                        {
+                            cmd.DbCommand.ExecuteNonQuery();
+                        }
+                        catch (Exception e)
+                        {
+                            SqlLogEvent(false, "执行存储过程出错,准备回滚\r\n" + item.SqlStr + " " + sql, e.Message.ToString());
+                            dbTransaction.Rollback();
+                            dbTransaction.Dispose();
+                            return new SqlParamItemResult(false, "执行SQL出错!", e.Message.ToUpper(), new SqlParamItem(item.SqlStr, -1, -1));
+                        }
+                    }
+
+                    SqlLogEvent(true, "提交事务", dbTransaction.ToString());
+                    try
+                    {
+                        dbTransaction.Commit();
+                    }
+                    catch (Exception e)
+                    {
+                        dbTransaction.Dispose();
+                        SqlLogEvent(false, "提交事务出错", e.Message.ToString());
+                        return new SqlParamItemResult(false, "提交事务出错!", "提交事务出错!", null);
+                    }
+                    dbTransaction.Dispose();
+                    return new SqlParamItemResult(true, "执行成功!", "", null);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 执行单条更新语句
+        /// </summary>
+        /// <param name="paramSqlItem">执行更新的sql对象</param>
+        /// <returns>True 表示执行成功,False表示执行失败</returns>
+        /// <remarks>如果影响的行数不等于计划的行数,执行事务会回滚并返回失败</remarks>
+        public SqlItemResult RunUpdateSqlWithTran(SqlItem paramSqlItem)
+        {
+            using (SqlConnection_Con conn = new SqlConnection_Con(DataBaseType, ConnString))
+            {
+                using (DbCommandCommon cmd = new DbCommandCommon(DataBaseType))
+                {
+                    PreparCommand(conn.DbConnection, cmd.DbCommand, paramSqlItem.SqlStr, CommandType.Text);
+
+                    SqlLogEvent(true, "开始一个事务", "");
+                    DbTransaction dbTransaction;
+                    int num;
+                    try
+                    {
+                        dbTransaction = cmd.DbCommand.Connection.BeginTransaction();
+                    }
+                    catch (Exception e)
+                    {
+                        SqlLogEvent(false, "开始一个事务出错", e.Message.ToString());
+                        return new SqlItemResult(false, "开始一个事务出错!", e.Message.ToUpper(), paramSqlItem);
+                    }
+
+                    SqlLogEvent(true, "执行更新SQL", paramSqlItem.SqlStr);
+                    try
+                    {
+                        num = cmd.DbCommand.ExecuteNonQuery();
+                    }
+                    catch (Exception e)
+                    {
+                        SqlLogEvent(false, "执行存储过程出错,准备回滚\r\n" + paramSqlItem.SqlStr, e.Message.ToString());
+                        dbTransaction.Rollback();
+                        dbTransaction.Dispose();
+                        return new SqlItemResult(false, "执行SQL出错!", e.Message.ToUpper(), paramSqlItem);
+                    }
+
+                    if ((paramSqlItem.ResultCount != -1) && (paramSqlItem.ResultCount != num))
+                    {
+                        SqlLogEvent(false, "执行更新SQL条目出错,准备回滚", "Update条数" + num.ToString() + "不等于计划更新条数");
+                        try
+                        {
+                            dbTransaction.Rollback();
+                            dbTransaction.Dispose();
+                        }
+                        catch (Exception exception)
+                        {
+                            dbTransaction.Dispose();
+                            SqlLogEventHandler handler6 = this.SqlLogEvent;
+                            SqlLogEvent(false, "回滚出错", exception.Message.ToString());
+                        }
+                        return new SqlItemResult(false, "Update条数" + num.ToString() + "不等于计划更新条数" + paramSqlItem.ResultCount.ToString(), "", paramSqlItem);
+                    }
+
+
+                    SqlLogEvent(true, "提交事务", dbTransaction.ToString());
+                    try
+                    {
+                        dbTransaction.Commit();
+                    }
+                    catch (Exception e)
+                    {
+                        dbTransaction.Dispose();
+                        SqlLogEvent(false, "提交事务出错", e.Message.ToString());
+                        return new SqlItemResult(false, "提交事务出错!", "", paramSqlItem);
+                    }
+                    dbTransaction.Dispose();
+                    return new SqlItemResult(true, "执行成功!", "", paramSqlItem);
+                }
+            }
+        }
+
+        /// <summary>
+        ///  批量执行执行更新语句
+        /// </summary>
+        /// <param name="paramSqlItemList">需要执行的SQL列表.类型为List(Of SqlItem)</param>
+        /// <returns></returns>
+        /// <remarks></remarks>
+        public SqlItemResult RunUpdateSqlBatchWithTran(List<SqlItem> paramSqlItemList)
+        {
+            using (SqlConnection_Con conn = new SqlConnection_Con(DataBaseType, ConnString))
+            {
+                using (DbCommandCommon cmd = new DbCommandCommon(DataBaseType))
+                {
+                    SqlLogEvent(true, "开始一个事务", "");
+                    DbTransaction dbTransaction;
+                    int num;
+                    try
+                    {
+                        dbTransaction = cmd.DbCommand.Connection.BeginTransaction();
+                    }
+                    catch (Exception e)
+                    {
+                        SqlLogEvent(false, "开始一个事务出错", e.Message.ToString());
+                        return new SqlItemResult(false, "开始一个事务出错!", e.Message.ToUpper(), null);
+                    }
+                    foreach (SqlItem item in paramSqlItemList)
+                    {
+                        PreparCommand(conn.DbConnection, cmd.DbCommand, item.SqlStr, CommandType.Text);
+
+                        SqlLogEvent(true, "执行更新SQL", item.SqlStr);
+                        try
+                        {
+                            num = cmd.DbCommand.ExecuteNonQuery();
+                        }
+                        catch (Exception e)
+                        {
+                            SqlLogEvent(false, "执行存储过程出错,准备回滚\r\n" + item.SqlStr, e.Message.ToString());
+                            dbTransaction.Rollback();
+                            dbTransaction.Dispose();
+                            return new SqlItemResult(false, "执行SQL出错!", e.Message.ToUpper(), item);
+                        }
+
+                        if ((item.ResultCount != -1) && (item.ResultCount != num))
+                        {
+                            SqlLogEvent(false, "执行更新SQL条目出错,准备回滚", "Update条数" + num.ToString() + "不等于计划更新条数");
+                            try
+                            {
+                                dbTransaction.Rollback();
+                            }
+                            catch (Exception e)
+                            {
+                                dbTransaction.Dispose();
+                                SqlLogEvent(false, "回滚出错", e.Message.ToString());
+                            }
+                            return new SqlItemResult(false, "Update条数" + num.ToString() + "不等于计划更新条数" + item.ResultCount.ToString(), "", item);
+                        }
+
+                    }
+
+                    SqlLogEvent(true, "提交事务", "");
+                    try
+                    {
+                        dbTransaction.Commit();
+                    }
+                    catch (Exception e)
+                    {
+                        dbTransaction.Dispose();
+                        SqlLogEvent(false, "提交事务出错,准备回滚!", e.Message.ToString());
+                        return new SqlItemResult(false, "执行SQL出错!", e.Message.ToUpper(), null);
+                    }
+                    dbTransaction.Dispose();
+                    return new SqlItemResult(true, "执行成功!", "", null);
+                }
+            }
+        }
+        #endregion
 
         #region ---PreparCommand 构建一个通用的command对象供内部方法进行调用---
+
         /// <summary>
         /// 不带参数的设置sqlcommand对象
         /// </summary>
@@ -365,6 +745,7 @@ namespace LY.WMS.Framework.DataBase
             cmd.CommandText = commandTextOrSpName;
             cmd.CommandTimeout = 60;
         }
+
         /// <summary>
         /// 设置一个等待执行的SqlCommand对象
         /// </summary>
@@ -582,6 +963,7 @@ namespace LY.WMS.Framework.DataBase
         }
 
         #endregion
+
 
         #endregion
 

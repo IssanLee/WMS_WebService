@@ -50,6 +50,9 @@
     <Compile Include="Class1.cs" />
     <Compile Include="DataBase\DBHelper.cs" />
     <Compile Include="DataBase\SqlItem.cs" />
+    <Compile Include="DataBase\SqlItemResult.cs" />
+    <Compile Include="DataBase\SqlParamItem.cs" />
+    <Compile Include="DataBase\SqlParamItemResult.cs" />
     <Compile Include="Logger\Log4Net.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
