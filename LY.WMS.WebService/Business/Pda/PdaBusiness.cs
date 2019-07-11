@@ -1,5 +1,7 @@
 ﻿using LY.WMS.Framework.DataBase;
 using LY.WMS.WebService.Models;
+using LY.WMS.WebService.Models.Base;
+using LY.WMS.WebService.Models.Pda;
 using Oracle.ManagedDataAccess.Client;
 using System;
 using System.Collections.Generic;
@@ -8,14 +10,14 @@ using System.Data.Common;
 using System.Linq;
 using System.Web;
 
-namespace LY.WMS.WebService.Business
+namespace LY.WMS.WebService.Business.Pda
 {
     /// <summary>
     /// PDA相关业务
     /// </summary>
     public class PdaBusiness
     {
-        #region 1.登录权限验证部分
+        #region 0.登录权限验证部分
 
         #region 获取设备信息
         /// <summary>
@@ -323,6 +325,66 @@ namespace LY.WMS.WebService.Business
 
         #endregion
 
+        #region 1.其他查询
+        /// <summary>
+        /// 获取订单作业明细
+        /// </summary>
+        /// <param name="paramGetSql"></param>
+        /// <returns></returns>
+        public static List<OrderWorkItemClass> GetOrderWorkItemList(string paramGetSql)
+        {
+            List<OrderWorkItemClass> list = new List<OrderWorkItemClass>();
+            DataTable dataTableBySql = Common.OracleDB.GetDataTableBySql(paramGetSql.ToString());
+            checked
+            {
+                if (dataTableBySql == null) return null;
+                else if (dataTableBySql.Rows.Count == 0) return null;
+                else
+                {
+                    for (int i = 0; i < dataTableBySql.Rows.Count; i++)
+                    {
+                        GoodsClass goodsClass = new GoodsClass()
+                        {
+                            Id = Convert.ToInt32(dataTableBySql.Rows[i]["DEST_GOODS_ID"]),
+                            Code = dataTableBySql.Rows[i]["GOODS_CODE"].ToString(),
+                            Name = dataTableBySql.Rows[i]["GOODS_NAME"].ToString(),
+                            Spec = dataTableBySql.Rows[i]["GOODS_SPEC"].ToString(),
+                            Prod = dataTableBySql.Rows[i]["GOODS_MANU"].ToString(),
+                            Manu = dataTableBySql.Rows[i]["GOODS_MANU"].ToString(),
+                            ApprNo = dataTableBySql.Rows[i]["APPR_NO"].ToString()
+                        };
+
+                        GoodsPackClass goodsPackClass = new GoodsPackClass()
+                        {
+                            Id = Convert.ToInt32(dataTableBySql.Rows[i]["DEST_GOODS_PACK_ID"]),
+                            Code = dataTableBySql.Rows[i]["GOODS_PACK_CODE"].ToString(),
+                            Name = dataTableBySql.Rows[i]["GOODS_PACK_NAME"].ToString(),
+                            UnitQty = Convert.ToDecimal(dataTableBySql.Rows[i]["GOODS_PACK_UNIT_QTY"]),
+                            PackBcode = dataTableBySql.Rows[i]["PACK_BCODE"].ToString(),
+                            Goods = goodsClass
+                        };
+
+                        OrderWorkItemClass orderWorkItemClass = new OrderWorkItemClass()
+                        {
+                            WorkQty = Convert.ToDecimal(dataTableBySql.Rows[i]["DEST_QTY"]),
+                            WorkUnitPrice = Convert.ToDecimal(dataTableBySql.Rows[i]["DEST_UPRICE"]),
+                            DestLocCode = dataTableBySql.Rows[i]["DEST_LOC_CODE"].ToString(),
+                            SourLocCode = dataTableBySql.Rows[i]["SOUR_LOC_CODE"].ToString(),
+                            BatchNo = dataTableBySql.Rows[i]["DEST_BATCH_NO"].ToString(),
+                            ExpDate = dataTableBySql.Rows[i]["DEST_EXP_DATE"].ToString(),
+                            WorkByName = dataTableBySql.Rows[i]["WORK_BY_NAME"].ToString(),
+                            WorkDate = Convert.ToDateTime(dataTableBySql.Rows[i]["WORK_TIME"]),
+                            WorkDeviceCode = dataTableBySql.Rows[i]["WORK_DEVICE_NOTE"].ToString(),
+                            GoodsPack = goodsPackClass
+                        };
+                        list.Add(orderWorkItemClass);
+                    }
+                    return list;
+                }
+            }
+        }
+        #endregion
+
         #region 2.上架部分
 
         #region 获取待上架货品信息
@@ -447,5 +509,7 @@ namespace LY.WMS.WebService.Business
         #endregion
 
         #endregion
+
+        
     }
 }

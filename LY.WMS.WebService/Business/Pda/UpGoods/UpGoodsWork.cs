@@ -1,11 +1,16 @@
 ﻿using LY.WMS.Framework.DataBase;
+using LY.WMS.WebService.Business.Erp;
 using LY.WMS.WebService.Models;
+using LY.WMS.WebService.Models.Base;
+using LY.WMS.WebService.Models.Erp;
+using LY.WMS.WebService.Models.Pda;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Web;
 
-namespace LY.WMS.WebService.Business.UpGoods
+namespace LY.WMS.WebService.Business.Pda
 {
     /// <summary>
     /// 上架作业
@@ -16,6 +21,47 @@ namespace LY.WMS.WebService.Business.UpGoods
 
         private static int ReqId;
 
+        /// <summary>
+        /// 检查目标货位
+        /// </summary>
+        /// <param name="paramWorkData"></param>
+        /// <param name="LocCode"></param>
+        /// <returns></returns>
+        public static OpResult CheckDestLoc(MobileWorkDataClass paramWorkData, string LocCode)
+        {
+            string sql = string.Format(@"SELECT F_CHECK_UP_LOC({0}, '{1}') FROM DUAL", paramWorkData.OrderItemId.ToString(), paramWorkData.DestLocCode);
+            string checkResult = Common.OracleDB.GetStringBySql(sql);
+            if (checkResult == "Success")
+                return new OpResult(true, "", "", "");
+            else
+                return new OpResult(false, checkResult, "", "");
+        }
+
+        /// <summary>
+        /// 获取订单作业明细
+        /// </summary>
+        /// <param name="paramWorkData"></param>
+        /// <returns></returns>
+        public static List<OrderWorkItemClass> GetOrderWorkList(MobileWorkDataClass paramWorkData)
+        {
+            string sql = string.Format(@"   SELECT T.* 
+                                            FROM (
+                                                SELECT ROW_NUMBER() OVER(ORDER BY W.work_time DESC) R_INDEX,W.*
+                                                FROM V_WH_WORK W
+                                                WHERE W.WORK_TYPE_NOTE = '{0}'
+                                                AND W.WORK_TIME > SYSDATE -1
+                                                AND  W.WORK_BY_ID = {1}
+                                                ) T
+                                            WHERE T.R_INDEX < 101",
+                paramWorkData.WorkType.ToString(), paramWorkData.WorkById.ToString());
+            return PdaBusiness.GetOrderWorkItemList(sql);
+        }
+
+        /// <summary>
+        /// 上架数据保存
+        /// </summary>
+        /// <param name="paramWorkData"></param>
+        /// <returns></returns>
         public static OpResult Save(MobileWorkDataClass paramWorkData)
         {
             //Log 开始保存上架数据;
@@ -23,11 +69,15 @@ namespace LY.WMS.WebService.Business.UpGoods
             if (!opResult.Result) return opResult;
 
             InitWorkData(paramWorkData);
+
             List<SqlItem> paramSqlItemList = new List<SqlItem>();
+
+            // 上架作业数量模式 默认:AddQtyToAcc累加作业数量到库存数量
             if (ReqId > 0 && Common.Sysparam.GetparamValueCodeByCode("UpWorkQtyMode") != "AddQtyToAcc")
             {
                 GetUpdateSourLocAccSql(paramWorkData, paramSqlItemList);
             }
+
             GetInsertDestLocAccSql(paramWorkData, paramSqlItemList);
             GetInsertWhWorkSql(paramWorkData, paramSqlItemList);
             GetUpdateOdItemSql(paramWorkData, paramSqlItemList);
@@ -35,7 +85,7 @@ namespace LY.WMS.WebService.Business.UpGoods
             {
                 GetUpdateGrnItemSql(paramWorkData, paramSqlItemList);
                 GetUpdatePoItemSql(paramWorkData, paramSqlItemList);
-                GetUpdateReqStatusSql(paramWorkData, paramSqlItemList);
+                GetUpdateReqStatusSql(paramWorkData, paramSqlItemList, EnumTranStatus.UpGoods);
             }
             GetUpdateOdSql(paramWorkData, paramSqlItemList);
             SqlItemResult sqlItemResultClass = new SqlItemResult();
@@ -58,42 +108,27 @@ namespace LY.WMS.WebService.Business.UpGoods
                 {
                     if (!CheckGrnFinished(paramWorkData)) return new OpResult(true, "操作完成", "", "");
 
-                    OpResult opResult2 = UpdatePoStatus(paramWorkData, EnumTranStatusClass.UpGoodsFinished);
+                    OpResult opResult2 = UpdatePoStatus(paramWorkData);
                     if (!opResult2.Result) return new OpResult(false, "更新采购订单状态失败", opResult2.ErrorCode, opResult2.ErrorDetail);
                 }
                 else if (!CheckUpFinished(paramWorkData)) return new OpResult(true, "操作完成", "", "");
 
+                // 收货数据回传模式 默认：AfterUpFinished(整单上架完成时提交)
+                // AfterReceived 收货完成时提交
+                // AfterUpFinished 整单上架完成时提交
+                // AfterRowUpFinished 单次上架完成时提交
+                // InterFaceService 接口服务检查提交
                 string receiveMode = Common.Sysparam.GetparamValueCodeByCode("ReceiveWorkUpMode");
+                // ERP接口模式 默认：WebServiceComMode(WebService标准模式)
                 string erpInfMode = Common.Sysparam.GetparamValueCodeByCode("ErpInterfaceMode");
+
                 if (receiveMode != "AfterUpFinished" && erpInfMode != "WebServiceComModeWithYbx")
                 {
                     return new OpResult(true, "操作完成", "", "");
                 }
-                else if (erpInfMode != "WebServiceComMode")
-                {
-                    if (erpInfMode != "WebServiceComModeWithYbx")
-                    {
-                        if (erpInfMode != "RjtExchange")
-                        {
-                            return new OpResult(true, "", "", "");
-                        }
-                        else if (UpTypeStr != "SR" && Common.OracleDB.GetIntegerBySql("SELECT NVL(REQ_ID,0) FROM OD O WHERE O.OD_ID = " + paramWorkData.OrderId.ToString()) == 0)
-                        {
-                            return new OpResult(true, "操作完成", "", "");
-                        }
-                        else
-                        {
-                            return UpdatePoWithRjt(paramWorkData.OrderId, this.SubmitSrToErpWithRjtExchange(paramWorkData));
-                        }
-                    }
-                    else
-                    {
-                        return YbxSubmit(paramWorkData, this.t_UpTypeStr);
-                    }
-                }
                 else
                 {
-                    return StdCommSubmit(paramWorkData, this.t_UpTypeStr);
+                    return StdCommSubmit(paramWorkData, UpTypeStr);
                 }
             }
         }
@@ -542,18 +577,18 @@ namespace LY.WMS.WebService.Business.UpGoods
         /// <param name="paramWorkData"></param>
         /// <param name="paramSqlItemList"></param>
         /// <returns></returns>
-        private static void GetUpdateReqStatusSql(MobileWorkDataClass paramWorkData, List<SqlItem> paramSqlItemList)
+        private static void GetUpdateReqStatusSql(MobileWorkDataClass paramWorkData, List<SqlItem> paramSqlItemList, EnumTranStatus paramToStaus)
         {
             string sql = string.Format(@"UPDATE REQ U
                                         SET
-                                            U.STATUS_ID = (SELECT T.STATUS_ID FROM STATUS T WHERE T.CODE = '12' )
+                                            U.STATUS_ID = (SELECT T.STATUS_ID FROM STATUS T WHERE T.CODE = '{0}' )
                                         WHERE U.REQ_ID = (
                                             SELECT
                                                 DISTINCT O.REQ_ID
                                             FROM OD_GOODS_ITEM I
                                             INNER JOIN OD O ON I.OD_ID = O.OD_ID AND O.TRAN_TYPE_ID = 11
-                                            WHERE I.OD_GOODS_ITEM_ID = {0}
-                                        )", paramWorkData.OrderItemId.ToString());
+                                            WHERE I.OD_GOODS_ITEM_ID = {1}
+                                        )", paramToStaus.ToString(), paramWorkData.OrderItemId.ToString());
             paramSqlItemList.Add(new SqlItem(sql, -1));
         }
 
@@ -572,5 +607,370 @@ namespace LY.WMS.WebService.Business.UpGoods
             paramSqlItemList.Add(new SqlItem(sql, 1));
         }
 
+        /// <summary>
+        /// 检查订单是否已完成
+        /// </summary>
+        /// <param name="paramWorkData"></param>
+        /// <returns></returns>
+        private static bool CheckGrnFinished(MobileWorkDataClass paramWorkData)
+        {
+            string sql = string.Format(@"SELECT
+                                            COUNT(*) ITEM_COUNT
+                                        FROM OD O
+                                        INNER JOIN OD_GOODS_ITEM I ON O.OD_ID = I.OD_ID
+                                        INNER JOIN OD            U ON O.OD_ID = U.SOUR_OD_ID
+                                        WHERE U.OD_ID = {0}
+                                        AND O.TRAN_TYPE_ID = 15
+                                        AND (I.FINISHED_PACK_QTY <> I.ARRIVED_PACK_QTY)",
+                paramWorkData.OrderId);
+            try
+            {
+                return Common.OracleDB.GetIntegerBySql(sql) == 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 更新采购订单状态
+        /// </summary>
+        /// <param name="paramWorkData"></param>
+        /// <param name="paramStatus"></param>
+        /// <returns></returns>
+        private static OpResult UpdatePoStatus(MobileWorkDataClass paramWorkData)
+        {
+            List<SqlItem> paramSqlItemList = new List<SqlItem>();
+
+            GetUpdateReqStatusSql(paramWorkData, paramSqlItemList, EnumTranStatus.UpGoodsFinished);
+
+            GetReqWorkFinishedSql(paramWorkData, paramSqlItemList);
+
+            SqlItemResult sqlItemResultClass;
+            try
+            {
+                sqlItemResultClass = Common.OracleDB.RunUpdateSqlBatchWithTran(paramSqlItemList);
+            }
+            catch (Exception ex)
+            {
+                return new OpResult(false, "更新订单状态出错", "", ex.Message.ToString());
+            }
+            if (!sqlItemResultClass.SqlResult)
+            {
+                return new OpResult(false, "更新订单状态失败", "", sqlItemResultClass.ErrorMessage.ToString());
+            }
+            else
+            {
+                return new OpResult(true, "操作成功", "", "");
+            }
+        }
+
+        /// <summary>
+        /// 获取订单完成SQL
+        /// </summary>
+        /// <param name="paramWorkData"></param>
+        /// <param name="paramSqlItemList"></param>
+        private static void GetReqWorkFinishedSql(MobileWorkDataClass paramWorkData, List<SqlItem> paramSqlItemList)
+        {
+            string sql = string.Format(@"INSERT INTO REQ_WORK (REQ_ID,PARTNER_ID,WORK_TYPE_ID,FROM_STATUS_ID,TO_STATUS_ID,STATUS_DESCRIPT,NOTE,CR_BY,CR_DATE,ROW_VER)
+                                        SELECT
+                                            R.REQ_ID,
+                                            R.PARTNER_ID,
+                                            4 WORK_TYPE_ID,
+                                            R.STATUS_ID FROM_STATUS_ID,
+                                            13 TO_STATUS_ID,
+                                            '上架完成' STATUS_DESCRIPT,
+                                            '' NOTE,
+                                            (SELECT S.NAME FROM STAFF S WHERE S.STAFF_ID = {0}),
+                                            SYSDATE CR_DATE,
+                                            0 ROW_VER
+                                        FROM REQ R
+                                        WHERE R.REQ_ID = 
+                                            (SELECT O.REQ_ID FROM OD O WHERE O.OD_ID = {1}",
+                paramWorkData.WorkById.ToString(), paramWorkData.OrderId.ToString());
+            paramSqlItemList.Add(new SqlItem(sql, -1));
+        }
+
+        /// <summary>
+        /// 检查上架是否完成
+        /// </summary>
+        /// <param name="paramWorkData"></param>
+        /// <returns></returns>
+        private static bool CheckUpFinished(MobileWorkDataClass paramWorkData)
+        {
+            return Common.OracleDB.GetIntegerBySql("SELECT CURR_STATUS_ID FROM OD O WHERE O.OD_ID =  " + paramWorkData.OrderId.ToString()) == 3;
+        }
+
+        /// <summary>
+        /// 更新采购单
+        /// </summary>
+        /// <param name="ParamPoCode"></param>
+        /// <param name="ParamResult"></param>
+        /// <returns></returns>
+        public static OpResult UpdatePo(string ParamPoCode, bool ParamResult)
+        {
+            string sql = string.Format(@"UPDATE REQ U
+                                        SET
+                                            U.EXP_STATUS_ID = (SELECT ES.EXP_STATUS_ID FROM EXP_STATUS ES WHERE ES.CODE = '{0}'
+                                        WHERE U.CODE = '{1}'", ParamResult ? "F": "E", ParamPoCode);
+            SqlItemResult sqlItemResult = Common.OracleDB.RunUpdateSqlWithTran(new SqlItem(sql, 1));
+            OpResult result;
+            if (!sqlItemResult.SqlResult)
+            {
+                result = new OpResult(false, sqlItemResult.ErrorMessage, sqlItemResult.ErrorDescript, "");
+            }
+            else
+            {
+                result = new OpResult(true, "操作成功", "", "");
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 标准ERP接口回传
+        /// </summary>
+        /// <param name="paramWorkData"></param>
+        /// <param name="paramUpStr"></param>
+        /// <returns></returns>
+        private static OpResult StdCommSubmit(MobileWorkDataClass paramWorkData, string paramUpStr)
+        {
+            switch (paramUpStr)
+            {
+                case "SR":
+                case "PO_SR":
+                    return SubmitSrToErp(paramWorkData);
+                case "PI":
+                    return SubmitRglToErp(paramWorkData);
+                default:
+                    return SubmitRglToErp(paramWorkData);
+            }
+        }
+
+        /// <summary>
+        /// 销退ERP回传
+        /// </summary>
+        /// <param name="paramWorkData"></param>
+        /// <returns></returns>
+        private static OpResult SubmitSrToErp(MobileWorkDataClass paramWorkData)
+        {
+            string submitSrSql = string.Format(@"SELECT V.* FROM V_SUBMIT_SR_TO_ERP V WHERE V.WMS_ID = {0}", paramWorkData.OrderId.ToString());
+            DataTable subDataTable = Common.OracleDB.GetDataTableBySql(submitSrSql);
+            checked
+            {
+                if (subDataTable == null || subDataTable.Rows.Count != 1)
+                {
+                    return new OpResult(false, "获取收货数据失败!", "", "");
+                }
+                else
+                {
+                    SwapSrClass swapSrClass = new SwapSrClass
+                    {
+                        ItemList = new List<SwapSrItemClass>()
+                    };
+                    DataRow dataRow = subDataTable.Rows[0];
+                    swapSrClass.SrCode = dataRow["SR_CODE"].ToString();
+                    swapSrClass.ShipCode = dataRow["SHIP_CODE"].ToString();
+                    swapSrClass.WorkByCode = dataRow["WORK_BY_CODE"].ToString();
+                    swapSrClass.WorkTime = Convert.ToDateTime(dataRow["WORK_TIME"]);
+                    swapSrClass.WhId = dataRow["WH_ID"].ToString();
+                    swapSrClass.ItemCount = Convert.ToInt32(dataRow["ITEM_COUNT"].ToString());
+                    swapSrClass.WmsId = dataRow["WMS_ID"].ToString();
+                    swapSrClass.StatusId = Convert.ToInt32(dataRow["STATUS_ID"].ToString());
+                    swapSrClass.CrDate = Convert.ToDateTime(dataRow["CR_DATE"].ToString());
+                    swapSrClass.LmDate = Convert.ToDateTime(dataRow["LM_DATE"].ToString());
+                    swapSrClass.N_1 = dataRow["N_1"].ToString();
+                    swapSrClass.N_2 = dataRow["N_2"].ToString();
+                    swapSrClass.N_3 = dataRow["N_3"].ToString();
+                    swapSrClass.N_4 = dataRow["N_4"].ToString();
+
+                    string submitSrItemSql = string.Format(@"SELECT V.* FROM V_SUBMIT_SR_ITEM_TO_ERP V WHERE V.OD_ID = {0}", paramWorkData.OrderId.ToString());
+                    DataTable subItemDataTable = Common.OracleDB.GetDataTableBySql(submitSrItemSql);
+                    if (subItemDataTable == null || subItemDataTable.Rows.Count == 0)
+                    {
+                        return new OpResult(false, "获取收货明细数据失败!", "", "");
+                    }
+                    else
+                    {
+                        for (int i = 0; i < subItemDataTable.Rows.Count; i++)
+                        {
+                            SwapSrItemClass swapSrItemClass = new SwapSrItemClass();
+                            DataRow dataRow2 = subItemDataTable.Rows[i];
+                            swapSrItemClass.SrItemId = Convert.ToString(dataRow2["SR_ITEM_ID"]);
+                            swapSrItemClass.SrItemIndex = Convert.ToInt32(dataRow2["SR_ITEM_INDEX"]);
+                            swapSrItemClass.GCode = Convert.ToString(dataRow2["GOODS_CODE"]);
+                            swapSrItemClass.ErpGoodsId = dataRow2["ERP_G_ID"].ToString();
+                            swapSrItemClass.BatchNo = dataRow2["BATCH_NO"].ToString();
+                            swapSrItemClass.ExpDate = dataRow2["EXP_DATE"].ToString();
+                            swapSrItemClass.ManuDate = dataRow2["MANU_DATE"].ToString();
+                            swapSrItemClass.GpCode = dataRow2["UNIT_CODE"].ToString();
+                            swapSrItemClass.Qty = Convert.ToDecimal(dataRow2["QTY"]);
+                            swapSrItemClass.GpUnitQty = Convert.ToDecimal(dataRow2["UNIT_QTY"]);
+                            swapSrItemClass.WorkByCode = dataRow2["WORK_BY_CODE"].ToString();
+                            swapSrItemClass.WorkTime = Convert.ToDateTime(dataRow2["WORK_TIME"]);
+                            swapSrItemClass.WhId = Convert.ToString(dataRow2["WH_ID"]);
+                            swapSrItemClass.WmsId = Convert.ToString(dataRow2["WMSID"]);
+                            swapSrItemClass.CrDate = Convert.ToDateTime(dataRow2["CR_DATE"]);
+                            swapSrItemClass.N_1 = dataRow2["N_1"].ToString();
+                            swapSrItemClass.N_2 = dataRow2["N_2"].ToString();
+                            swapSrItemClass.N_3 = dataRow2["N_3"].ToString();
+                            swapSrItemClass.N_4 = dataRow2["N_4"].ToString();
+                            swapSrItemClass.UnitPrice = Convert.ToDecimal(dataRow2["UNIT_PRICE"]);
+                            swapSrItemClass.CheckQty = Convert.ToDecimal(dataRow2["CHECK_QTY"]);
+                            swapSrItemClass.RejectQty = Convert.ToDecimal(dataRow2["REJECT_QTY"]);
+                            swapSrItemClass.RejectReason = dataRow2["REJECT_REASON"].ToString();
+                            swapSrItemClass.FromLocCode = dataRow2["FROM_LOC_CODE"].ToString();
+                            swapSrItemClass.ToLocCode = dataRow2["TO_LOC_CODE"].ToString();
+                            try
+                            {
+                                swapSrClass.ItemList.Add(swapSrItemClass);
+                            }
+                            catch(Exception e)
+                            {
+                                return new OpResult(false, "获取收货明细数据失败", "", e.Message.ToString());
+                            }
+                        }
+                        ResultMessage resultMessage;
+                        try
+                        {
+                            resultMessage = ErpBusiness.SubmitSrToErp(swapSrClass);
+                        }
+                        catch (Exception ex)
+                        {
+                            return new OpResult(false, "数据提交到ERP时出错", "", ex.Message.ToString());
+                        }
+                        if (!resultMessage.Result)
+                        {
+                            return new OpResult(false, "数据提交到ERP失败", "", resultMessage.ErrorStr.ToString());
+                        }
+                        else
+                        {
+                            return new OpResult(true, "操作成功", "", "");
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 采购ERP回传
+        /// </summary>
+        /// <param name="paramWorkData"></param>
+        /// <returns></returns>
+        private static OpResult SubmitRglToErp(MobileWorkDataClass paramWorkData)
+        {
+            string submitSrSql = string.Format(@"SELECT V.* FROM V_SUBMIT_RGL_TO_ERP V WHERE V.WMS_ID = (SELECT I.SOUR_OD_ID FROM OD I WHERE I.OD_ID = {0})", paramWorkData.OrderId.ToString());
+            DataTable subDataTable = Common.OracleDB.GetDataTableBySql(submitSrSql);
+            checked
+            {
+                if (subDataTable == null || subDataTable.Rows.Count != 1)
+                {
+                    return new OpResult(false, "获取收货数据失败!", "回传收货入库数据失败", "");
+                }
+                else
+                {
+                    RglClass rglClass = new RglClass
+                    {
+                        ItemList = new List<RglItemClass>()
+                    };
+                    DataRow dataRow = subDataTable.Rows[0];
+                    try
+                    {
+                        rglClass.PoCode = dataRow["PO_CODE"].ToString();
+                        rglClass.ShipCode = dataRow["SHIP_CODE"].ToString();
+                        rglClass.WorkByCode = dataRow["WORK_BY_CODE"].ToString();
+                        rglClass.WorkTime = Convert.ToDateTime(dataRow["WORK_TIME"]);
+                        rglClass.WhId = dataRow["WH_ID"].ToString();
+                        rglClass.ItemCount = Convert.ToInt32(dataRow["ITEM_COUNT"].ToString());
+                        rglClass.WmsId = dataRow["WMS_ID"].ToString();
+                        rglClass.StatusId = Convert.ToInt32(dataRow["STATUS_ID"].ToString());
+                        rglClass.CrDate = Convert.ToDateTime(dataRow["CR_DATE"].ToString());
+                        rglClass.LmDate = Convert.ToDateTime(dataRow["LM_DATE"].ToString());
+                        rglClass.N_1 = dataRow["N_1"].ToString();
+                        rglClass.N_2 = dataRow["N_2"].ToString();
+                        rglClass.N_3 = dataRow["N_3"].ToString();
+                        rglClass.N_4 = dataRow["N_4"].ToString();
+                    }
+                    catch
+                    {
+                        return new OpResult(false, "填充单据头数据出错!", "回传收货入库数据失败", "");
+                    }
+                    string submitSrItemSql = string.Format(@"SELECT V.* FROM V_SUBMIT_RGL_ITEM_TO_ERP V WHERE V.OD_ID =(SELECT I.SOUR_OD_ID FROM OD I WHERE I.OD_ID = {0})", paramWorkData.OrderId.ToString());
+                    DataTable subItemDataTable = Common.OracleDB.GetDataTableBySql(submitSrItemSql);
+                    if (subItemDataTable == null || subItemDataTable.Rows.Count == 0)
+                    {
+                        return new OpResult(false, "获取收货明细数据失败!", "回传收货入库数据失败", "");
+                    }
+                    else
+                    {
+                        for (int i = 0; i < subItemDataTable.Rows.Count; i++)
+                        {
+                            RglItemClass rglItemClass = new RglItemClass();
+                            DataRow dataRow2 = subItemDataTable.Rows[i];
+                            try
+                            {
+                                rglItemClass.PoItemId = Convert.ToString(dataRow2["PO_ITEM_ID"]);
+                                rglItemClass.PoItemIndex = Convert.ToInt32(dataRow2["PO_ITEM_INDEX"]);
+                                rglItemClass.GCode = Convert.ToString(dataRow2["GOODS_CODE"]);
+                                rglItemClass.ErpGoodsId = dataRow2["ERP_G_ID"].ToString();
+                                rglItemClass.BatchNo = dataRow2["BATCH_NO"].ToString();
+                                rglItemClass.ExpDate = dataRow2["EXP_DATE"].ToString();
+                                rglItemClass.ManuDate = dataRow2["MANU_DATE"].ToString();
+                                rglItemClass.GpCode = dataRow2["UNIT_CODE"].ToString();
+                                rglItemClass.Qty = Convert.ToDecimal(dataRow2["QTY"]);
+                                rglItemClass.GpUnitQty = Convert.ToDecimal(dataRow2["UNIT_QTY"]);
+                                rglItemClass.WorkByCode = dataRow2["WORK_BY_CODE"].ToString();
+                                rglItemClass.WorkTime = Convert.ToDateTime(dataRow2["WORK_TIME"]);
+                                rglItemClass.FromLocCode = dataRow2["FROM_LOC_CODE"].ToString();
+                                rglItemClass.ToLocCode = dataRow2["TO_LOC_CODE"].ToString();
+                                rglItemClass.WhId = Convert.ToString(dataRow2["WH_ID"]);
+                                rglItemClass.WmsId = Convert.ToString(dataRow2["WMSID"]);
+                                rglItemClass.CrDate = Convert.ToDateTime(dataRow2["CR_DATE"]);
+                                rglItemClass.N_1 = dataRow2["N_1"].ToString();
+                                rglItemClass.N_2 = dataRow2["N_2"].ToString();
+                                rglItemClass.N_3 = dataRow2["N_3"].ToString();
+                                rglItemClass.N_4 = dataRow2["N_4"].ToString();
+                                rglItemClass.UnitPrice = Convert.ToDecimal(dataRow2["UNIT_PRICE"]);
+                                rglItemClass.CheckQty = Convert.ToDecimal(dataRow2["CHECK_QTY"].ToString());
+                                rglItemClass.RejectQty = Convert.ToDecimal(dataRow2["REJECT_QTY"].ToString());
+                                rglItemClass.RejectReason = dataRow2["REJECT_REASON"].ToString();
+                            }
+                            catch
+                            {
+                                return new OpResult(false, "填充收货明细数据失败!", "回传收货入库数据失败", "");
+                            }
+                            try
+                            {
+                                rglClass.ItemList.Add(rglItemClass);
+                            }
+                            catch
+                            {
+                                return new OpResult(false, "获取收货明细数据失败!", "回传收货入库数据失败", "");
+                            }
+                        }
+                        ResultMessage resultMessage;
+                        try
+                        {
+                            resultMessage = ErpBusiness.SubmitRglToErp(rglClass);
+                        }
+                        catch (Exception ex)
+                        {
+                            return new OpResult(false, "数据提交到ERP时出错", "回传收货入库数据失败", ex.Message.ToString());
+                        }
+
+                        UpdatePo(rglClass.PoCode, resultMessage.Result);
+
+                        if (!resultMessage.Result)
+                        {
+                            return new OpResult(false, "数据提交到ERP失败", "回传收货入库数据失败", resultMessage.ErrorStr.ToString());
+                        }
+                        else
+                        {
+                            return new OpResult(true, "操作成功", "", "");
+                        }
+                    }
+                }
+            }
+        }
     }
 }

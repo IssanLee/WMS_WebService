@@ -1,4 +1,4 @@
-﻿namespace LY.WMS.WebService.Models
+﻿namespace LY.WMS.WebService.Models.Pda
 {
     /// <summary>
     /// 上架货品信息

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace LY.WMS.WebService.Models
+namespace LY.WMS.WebService.Models.Pda
 {
     /// <summary>
     /// Pda作业数据

@@ -1,5 +1,8 @@
 ﻿using LY.WMS.WebService.Business;
+using LY.WMS.WebService.Business.Pda;
 using LY.WMS.WebService.Models;
+using LY.WMS.WebService.Models.Base;
+using LY.WMS.WebService.Models.Pda;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -40,24 +43,24 @@ namespace LY.WMS.WebService
 
         #endregion
 
-        #region 登录权限部分
+        #region 登录权限部分[包括货位检查]
 
         [WebMethod]
         public DeviceClass GetDeviceInfo(string paramMac, string paramDeviceKeyCode)
         {
-            return Info.GetDeviceInfo(paramMac, paramDeviceKeyCode);
+            return PdaBusiness.GetDeviceInfo(paramMac, paramDeviceKeyCode);
         }
 
         [WebMethod]
         public UserClass CardPwdLogin(string paramCardPwd, string paramDeviceMac)
         {
-            return Info.CardPwdLogin(paramCardPwd, paramDeviceMac);
+            return PdaBusiness.CardPwdLogin(paramCardPwd, paramDeviceMac);
         }
 
         [WebMethod]
         public List<UserRight> GetUserRightList(string paramUserFlag, string paramUsergid)
         {
-            return Info.GetUserRightList(paramUserFlag, paramUsergid);
+            return PdaBusiness.GetUserRightList(paramUserFlag, paramUsergid);
         }
 
         [WebMethod]
@@ -71,8 +74,7 @@ namespace LY.WMS.WebService
             {
                 // 上架
                 case EnumWorkType.UpGoodsWork:
-                    //m_WorkToDatabase = new UpGoodsWorkClass();
-                    break;
+                    return UpGoodsWork.CheckDestLoc(paramWorkData, paramLocCode);
                 // 移库
                 case EnumWorkType.MoveUpGoodsToLoc:
                     //m_WorkToDatabase = new MoveToLocWorkClass();
@@ -85,10 +87,26 @@ namespace LY.WMS.WebService
                     return new OpResult(false, "未知的作业类型!");
             }
             return null;
-            //return m_WorkToDatabase.CheckDestLoc(paramWorkData, paramLocCode);
         }
 
         #endregion
+
+        [WebMethod]
+        public List<OrderWorkItemClass> GetOrderWorkItemList(string paramUserFlag, MobileWorkDataClass paramWorkData)
+        {
+            if (!PdaBusiness.CheckUserSession(Convert.ToInt32(paramUserFlag)))
+            {
+                return null;
+            }
+            switch (paramWorkData.WorkType)
+            {
+                case EnumWorkType.UpGoodsWork:
+                    return UpGoodsWork.GetOrderWorkList(paramWorkData);
+                
+                default:
+                    return null;
+            }
+        }
 
         #region 上架
 

@@ -79,25 +79,32 @@
     <Content Include="Web.config" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Business\GetTrans.cs" />
+    <Compile Include="Business\Erp\ErpBusiness.cs" />
     <Compile Include="Business\Info.cs" />
-    <Compile Include="Business\PdaBusiness.cs" />
-    <Compile Include="Business\SubmitToErp.cs" />
-    <Compile Include="Business\UpGoods\UpGoodsWork.cs" />
+    <Compile Include="Business\Pda\PdaBusiness.cs" />
+    <Compile Include="Business\Pda\UpGoods\UpGoodsWork.cs" />
     <Compile Include="Common.cs" />
     <Compile Include="Models\BaseIdClass.cs" />
     <Compile Include="Models\BaseVersionClass.cs" />
+    <Compile Include="Models\Base\GoodsClass.cs" />
+    <Compile Include="Models\Base\GoodsPackTypeClass.cs" />
     <Compile Include="Models\DeviceClass.cs" />
     <Compile Include="Models\EcodeItem.cs" />
     <Compile Include="Models\EnumEcodePackLevel.cs" />
     <Compile Include="Models\EnumEcodeWorkType.cs" />
-    <Compile Include="Models\EnumWorkType.cs" />
+    <Compile Include="Models\EnumType.cs" />
     <Compile Include="Models\ErpAccLocGbnClass.cs" />
+    <Compile Include="Models\Erp\RglClass.cs" />
+    <Compile Include="Models\Erp\RglItemClass.cs" />
+    <Compile Include="Models\Erp\SwapSrClass.cs" />
+    <Compile Include="Models\Erp\SwapSrItemClass.cs" />
     <Compile Include="Models\Pda\AttachItemValueClass.cs" />
     <Compile Include="Models\Pda\FuncClass.cs" />
+    <Compile Include="Models\Base\GoodsPackClass.cs" />
     <Compile Include="Models\Pda\MobileWorkDataClass.cs" />
     <Compile Include="Models\Pda\OpClass.cs" />
     <Compile Include="Models\Pda\OpResult.cs" />
+    <Compile Include="Models\Base\OrderWorkItemClass.cs" />
     <Compile Include="Models\Pda\SessionClass.cs" />
     <Compile Include="Models\Pda\SysparamItemClass.cs" />
     <Compile Include="Models\Pda\SysparamListClass.cs" />
@@ -108,15 +115,11 @@
     <Compile Include="Models\Pda\VirtualMessageClass.cs" />
     <Compile Include="Models\ReqClass.cs" />
     <Compile Include="Models\ReqItemClass.cs" />
-    <Compile Include="Models\RglClass.cs" />
-    <Compile Include="Models\RglItemClass.cs" />
     <Compile Include="Models\SocClass.cs" />
     <Compile Include="Models\SocItemClass.cs" />
     <Compile Include="Models\SocShipOrderClass.cs" />
     <Compile Include="Models\StockMoveItemClass.cs" />
     <Compile Include="Models\StockMoveToClass.cs" />
-    <Compile Include="Models\SwapSrClass.cs" />
-    <Compile Include="Models\SwapSrItemClass.cs" />
     <Compile Include="Models\Pda\SystemparamClass.cs" />
     <Compile Include="Models\WhWorkItem.cs" />
     <Compile Include="Models\WhWorkItemEcode.cs" />
@@ -153,9 +156,7 @@
       <Name>LY.WMS.Framework</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Models\Erp\" />
-  </ItemGroup>
+  <ItemGroup />
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
     <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
