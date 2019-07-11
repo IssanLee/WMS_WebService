@@ -44,6 +44,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Oracle.ManagedDataAccess, Version=4.122.19.1, Culture=neutral, PublicKeyToken=89b483f429c47342, processorArchitecture=MSIL">
+      <HintPath>..\packages\Oracle.ManagedDataAccess.19.3.0\lib\net40\Oracle.ManagedDataAccess.dll</HintPath>
+    </Reference>
     <Reference Include="System.Web.DynamicData" />
     <Reference Include="System.Web.Entity" />
     <Reference Include="System.Web.ApplicationServices" />
@@ -77,11 +80,47 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Business\GetTrans.cs" />
+    <Compile Include="Business\Info.cs" />
+    <Compile Include="Business\PdaBusiness.cs" />
+    <Compile Include="Business\SubmitToErp.cs" />
+    <Compile Include="Business\UpGoods\UpGoodsWork.cs" />
     <Compile Include="Common.cs" />
     <Compile Include="Models\BaseIdClass.cs" />
     <Compile Include="Models\BaseVersionClass.cs" />
+    <Compile Include="Models\DeviceClass.cs" />
+    <Compile Include="Models\EcodeItem.cs" />
+    <Compile Include="Models\EnumEcodePackLevel.cs" />
+    <Compile Include="Models\EnumEcodeWorkType.cs" />
+    <Compile Include="Models\EnumWorkType.cs" />
+    <Compile Include="Models\ErpAccLocGbnClass.cs" />
+    <Compile Include="Models\Pda\AttachItemValueClass.cs" />
+    <Compile Include="Models\Pda\FuncClass.cs" />
+    <Compile Include="Models\Pda\MobileWorkDataClass.cs" />
+    <Compile Include="Models\Pda\OpClass.cs" />
+    <Compile Include="Models\Pda\OpResult.cs" />
+    <Compile Include="Models\Pda\SessionClass.cs" />
+    <Compile Include="Models\Pda\SysparamItemClass.cs" />
+    <Compile Include="Models\Pda\SysparamListClass.cs" />
+    <Compile Include="Models\Pda\SystemInformation.cs" />
+    <Compile Include="Models\Pda\UpGoods\UpGoodsBatchNoClass.cs" />
+    <Compile Include="Models\Pda\UserClass.cs" />
+    <Compile Include="Models\Pda\UserRight.cs" />
+    <Compile Include="Models\Pda\VirtualMessageClass.cs" />
     <Compile Include="Models\ReqClass.cs" />
     <Compile Include="Models\ReqItemClass.cs" />
+    <Compile Include="Models\RglClass.cs" />
+    <Compile Include="Models\RglItemClass.cs" />
+    <Compile Include="Models\SocClass.cs" />
+    <Compile Include="Models\SocItemClass.cs" />
+    <Compile Include="Models\SocShipOrderClass.cs" />
+    <Compile Include="Models\StockMoveItemClass.cs" />
+    <Compile Include="Models\StockMoveToClass.cs" />
+    <Compile Include="Models\SwapSrClass.cs" />
+    <Compile Include="Models\SwapSrItemClass.cs" />
+    <Compile Include="Models\Pda\SystemparamClass.cs" />
+    <Compile Include="Models\WhWorkItem.cs" />
+    <Compile Include="Models\WhWorkItemEcode.cs" />
+    <Compile Include="ResultMessage.cs" />
     <Compile Include="WebService\DocWebService.asmx.cs">
       <DependentUpon>DocWebService.asmx</DependentUpon>
       <SubType>Component</SubType>
@@ -113,6 +152,9 @@
       <Project>{ae3bfc9e-a46c-4b75-ad5b-f5900f576060}</Project>
       <Name>LY.WMS.Framework</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Models\Erp\" />
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>

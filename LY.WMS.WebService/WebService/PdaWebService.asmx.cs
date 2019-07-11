@@ -1,4 +1,6 @@
-﻿using System;
+﻿using LY.WMS.WebService.Business;
+using LY.WMS.WebService.Models;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -17,27 +19,86 @@ namespace LY.WMS.WebService
     // [System.Web.Script.Services.ScriptService]
     public class PdaWebService : System.Web.Services.WebService
     {
-
+        #region Info
         [WebMethod]
-        public string HelloWorld()
+        public SystemInformation GetSystemInformation()
         {
-            return "Hello World";
+            return Info.GetSystemInformation();
         }
 
         [WebMethod]
-        public string GetSystemparamList()
+        public List<SystemparamClass> GetSystemparamList()
         {
-            string sql = string.Format(@"select * from V_SYS_param_LIST where SYS_param_GP_CODE = 'MOBILEPARAM'");
-            DataTable dataTable = Common.OracleDB.GetDataTableBySql(sql); 
-            return "";
+            return Info.GetSystemparamList();
         }
 
         [WebMethod]
-        public string GetDbVersion()
+        public static DateTime GetSystemDatetime()
         {
-            return Common.OracleDB.GetStringBySql("SELECT NAME FROM V$DATABASE");
+            return Info.GetSystemDatetime();
         }
 
+        #endregion
+
+        #region 登录权限部分
+
+        [WebMethod]
+        public DeviceClass GetDeviceInfo(string paramMac, string paramDeviceKeyCode)
+        {
+            return Info.GetDeviceInfo(paramMac, paramDeviceKeyCode);
+        }
+
+        [WebMethod]
+        public UserClass CardPwdLogin(string paramCardPwd, string paramDeviceMac)
+        {
+            return Info.CardPwdLogin(paramCardPwd, paramDeviceMac);
+        }
+
+        [WebMethod]
+        public List<UserRight> GetUserRightList(string paramUserFlag, string paramUsergid)
+        {
+            return Info.GetUserRightList(paramUserFlag, paramUsergid);
+        }
+
+        [WebMethod]
+        public OpResult CheckDestLoc(string paramUserFlag, MobileWorkDataClass paramWorkData, string paramLocCode)
+        {
+            if (!PdaBusiness.CheckUserSession(Convert.ToInt32(paramUserFlag)))
+            {
+                return new OpResult(false, "指定的用户无效!");
+            }
+            switch (paramWorkData.WorkType)
+            {
+                // 上架
+                case EnumWorkType.UpGoodsWork:
+                    //m_WorkToDatabase = new UpGoodsWorkClass();
+                    break;
+                // 移库
+                case EnumWorkType.MoveUpGoodsToLoc:
+                    //m_WorkToDatabase = new MoveToLocWorkClass();
+                    break;
+                // 盘点
+                case EnumWorkType.TakeWork:
+                    //m_WorkToDatabase = new StockTakeWorkClass();
+                    break;
+                default:
+                    return new OpResult(false, "未知的作业类型!");
+            }
+            return null;
+            //return m_WorkToDatabase.CheckDestLoc(paramWorkData, paramLocCode);
+        }
+
+        #endregion
+
+        #region 上架
+
+        [WebMethod]
+        public List<UpGoodsBatchNoClass> GetUpGoodsBatchNoList(string paramUserFlag, string paramGoodsStr, int paramWhId)
+        {
+            return PdaBusiness.GetUpGoodsBatchNoList(paramUserFlag, paramGoodsStr, paramWhId);
+        }
+
+        #endregion
 
     }
 }

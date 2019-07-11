@@ -238,7 +238,7 @@ namespace LY.WMS.Framework.DataBase
         }
 
         /// <summary>
-        /// 根据指定SQL获取一个DataTable
+        /// 根据指定SQL获取一个DataTable【已修改】
         /// </summary>
         /// <param name="paramSql">SQL文</param>
         /// <returns></returns>
@@ -318,6 +318,77 @@ namespace LY.WMS.Framework.DataBase
                 }   
             }
             return dataSet;
+        }
+
+        /// <summary>
+        /// 根据指定SQL及参数获取一个DataTable
+        /// </summary>
+        /// <param name="paramSql">SQL文</param>
+        /// <param name="paramList">参数</param>
+        /// <returns></returns>
+        public DataTable GetDataTableBySqlWithParam(string paramSql, List<DbParameter> paramList)
+        {
+            using (SqlConnection_Con conn = new SqlConnection_Con(DataBaseType, ConnString))
+            {
+                using (DbCommandCommon cmd = new DbCommandCommon(DataBaseType))
+                {
+                    PreparCommand(conn.DbConnection, cmd.DbCommand, paramSql, CommandType.Text);
+                    cmd.DbCommand.Parameters.AddRange(paramList.ToArray());
+                    SqlLogEvent(true, "执行查询", paramSql);
+                    using (DbDataAdapterCommon adapter = new DbDataAdapterCommon(DataBaseType, cmd.DbCommand))
+                    {
+                        try
+                        {
+                            DataSet ds = new DataSet();
+                            adapter.Fill(ds);
+                            if (ds.Tables.Count > 0)
+                            {
+                                return ds.Tables[0];
+                            }
+                        }
+                        catch (Exception exception)
+                        {
+                            SqlLogEvent(false, "执行查询出错\r\n" + paramSql, exception.Message.ToString());
+                        }
+
+                        return default;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 根据指定SQL及参数获取一个int
+        /// </summary>
+        /// <param name="paramSql"></param>
+        /// <param name="paramList"></param>
+        /// <returns></returns>
+        public int GetIntegerBySqlWithParam(string paramSql, List<DbParameter> paramList)
+        {
+            using (SqlConnection_Con conn = new SqlConnection_Con(DataBaseType, ConnString))
+            {
+                using (DbCommandCommon cmd = new DbCommandCommon(DataBaseType))
+                {
+                    PreparCommand(conn.DbConnection, cmd.DbCommand, paramSql, CommandType.Text);
+                    cmd.DbCommand.Parameters.AddRange(paramList.ToArray());
+                    SqlLogEvent(true, "执行查询", paramSql);
+                    try
+                    {
+                        DbDataReader dbDataReader;
+                        dbDataReader = cmd.DbCommand.ExecuteReader();
+                        if (dbDataReader.Read())
+                        {
+                            return Convert.ToInt32(dbDataReader[0].ToString());
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        SqlLogEvent(false, "执行查询出错\r\n" + paramSql, exception.Message.ToString());
+                    }
+
+                    return default;
+                }
+            }
         }
 
         /// <summary>
@@ -510,6 +581,7 @@ namespace LY.WMS.Framework.DataBase
                     DbTransaction dbTransaction;
                     try
                     {
+                        PreparCommand(conn.DbConnection, cmd.DbCommand);
                         dbTransaction = cmd.DbCommand.Connection.BeginTransaction();
                     }
                     catch (Exception e)
@@ -518,10 +590,11 @@ namespace LY.WMS.Framework.DataBase
                         return new SqlParamItemResult(false, "开始一个事务出错", e.Message.ToUpper(), null);
                     }
 
-                    string sql = "";
                     foreach (SqlParamItem item in paramSqlParamItem)
                     {
-                        PreparCommand(conn.DbConnection, cmd.DbCommand, item.GetSqlStr(), CommandType.StoredProcedure);
+                        string sql = "";
+                        cmd.DbCommand.Parameters.Clear();
+                        PreparCommand(conn.DbConnection, cmd.DbCommand, item.SqlStr, CommandType.Text);
 
                         if (item.ParamList.Count > 0)
                         {
@@ -531,7 +604,6 @@ namespace LY.WMS.Framework.DataBase
                                 {
                                     cmd.DbCommand.Parameters.Add(item.ParamList[i]);
                                     sql += item.ParamList[i].ParameterName.ToString() + "=" + item.ParamList[i].Value.ToString() + ",";
-
                                 }
                                 catch (Exception e)
                                 {
@@ -723,6 +795,25 @@ namespace LY.WMS.Framework.DataBase
         #endregion
 
         #region ---PreparCommand 构建一个通用的command对象供内部方法进行调用---
+        /// <summary>
+        /// 为事务设置sqlcommand对象
+        /// </summary>
+        /// <param name="conn">sqlconnection对象</param>
+        /// <param name="cmd">sqlcommmand对象</param>
+        /// <param name="commandTextOrSpName">sql语句或存储过程名称</param>
+        /// <param name="commandType">语句的类型</param>
+        private void PreparCommand(DbConnection conn, DbCommand cmd)
+        {
+            //打开连接
+            if (conn.State != ConnectionState.Open)
+            {
+                conn.Open();
+            }
+
+            //设置SqlCommand对象的属性值
+            cmd.Connection = conn;
+            cmd.CommandTimeout = 60;
+        }
 
         /// <summary>
         /// 不带参数的设置sqlcommand对象
